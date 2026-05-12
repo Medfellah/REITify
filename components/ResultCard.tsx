@@ -127,6 +127,7 @@ function HBar({
 // ── Tenant concentration ───────────────────────────────────────────────────
 
 function TenantCard({ result }: { result: ExtractionResult }) {
+  const [expanded, setExpanded] = useState(false)
   const rows = result.tenantRows ?? []
   const maxPct = rows.length > 0 ? rows[0].pct : 1
   const hasSqft = rows.some((r) => r.sqftM != null)
@@ -137,6 +138,8 @@ function TenantCard({ result }: { result: ExtractionResult }) {
     result.tenantTop25Pct != null ||
     top10SqftM > 0 ||
     top25SqftM > 0
+  const visibleRows = expanded ? rows : rows.slice(0, 10)
+  const extraCount = rows.length - 10
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-5 h-full flex flex-col">
@@ -162,7 +165,7 @@ function TenantCard({ result }: { result: ExtractionResult }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {rows.map((row) => (
+              {visibleRows.map((row) => (
                 <tr key={row.rank}>
                   <td className="py-1.5 text-slate-400 text-[11px]">{row.rank}</td>
                   <td className="py-1.5 text-slate-700">{row.name}</td>
@@ -194,6 +197,15 @@ function TenantCard({ result }: { result: ExtractionResult }) {
           )
         )}
       </div>
+
+      {extraCount > 0 && (
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-2 text-[11px] font-medium text-blue-600 hover:text-blue-800 text-left"
+        >
+          {expanded ? "Show less" : `Show ${extraCount} more tenant${extraCount === 1 ? "" : "s"}`}
+        </button>
+      )}
 
       {hasMetrics && (
         <div className="grid grid-cols-4 gap-1.5 mt-3">
@@ -579,7 +591,9 @@ function DebtCard({ result }: { result: ExtractionResult }) {
 
 function LeaseCard({ result }: { result: ExtractionResult }) {
   const allRows = result.leaseRows ?? []
-  const dataRows = allRows.filter((r) => r.year !== "Total")
+  const dataRows = allRows.filter(
+    (r) => r.year !== "Total" && r.nerM != null && r.nerM !== 0 && r.pct != null && r.pct !== 0
+  )
   const totalRow = allRows.find((r) => r.year === "Total")
   const hasPsf = allRows.some((r) => r.psf != null)
   const has24m =
