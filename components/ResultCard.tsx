@@ -128,6 +128,7 @@ function HBar({
 
 function TenantCard({ result }: { result: ExtractionResult }) {
   const rows = result.tenantRows ?? []
+  const maxPct = rows.length > 0 ? rows[0].pct : 1
   const hasSqft = rows.some((r) => r.sqftM != null)
   const top10SqftM = rows.slice(0, 10).reduce((s, r) => s + (r.sqftM ?? 0), 0)
   const top25SqftM = rows.reduce((s, r) => s + (r.sqftM ?? 0), 0)
@@ -163,14 +164,24 @@ function TenantCard({ result }: { result: ExtractionResult }) {
             <tbody className="divide-y divide-slate-50">
               {rows.map((row) => (
                 <tr key={row.rank}>
-                  <td className="py-1 text-slate-400 text-[11px]">{row.rank}</td>
-                  <td className="py-1 text-slate-700">{row.name}</td>
+                  <td className="py-1.5 text-slate-400 text-[11px]">{row.rank}</td>
+                  <td className="py-1.5 text-slate-700">{row.name}</td>
                   {hasSqft && (
-                    <td className="py-1 text-right text-slate-600">
+                    <td className="py-1.5 text-right text-slate-600">
                       {row.sqftM != null ? `${row.sqftM}M` : "—"}
                     </td>
                   )}
-                  <td className="py-1 text-right font-medium text-slate-800">{row.pct}%</td>
+                  <td className="py-1.5">
+                    <div className="flex items-center justify-end gap-2">
+                      <div className="w-14 h-1.5 bg-slate-100 rounded-full overflow-hidden flex-shrink-0">
+                        <div
+                          className="h-full bg-blue-500 rounded-full"
+                          style={{ width: `${Math.round((row.pct / maxPct) * 100)}%` }}
+                        />
+                      </div>
+                      <span className="font-medium text-slate-800 tabular-nums w-8 text-right">{row.pct}%</span>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -222,6 +233,48 @@ function TenantCard({ result }: { result: ExtractionResult }) {
 
 function fmtGBV(n: number) {
   return n >= 1000 ? `$${(n / 1000).toFixed(1)}B` : `$${n.toLocaleString()}M`
+}
+
+const GEO_COLORS: Record<string, string> = {
+  "U.S.": "#3b82f6",
+  "Europe": "#10b981",
+  "Asia": "#f59e0b",
+  "Other Americas": "#8b5cf6",
+}
+
+function DonutChart({ rows }: { rows: import("@/types").GeoRow[] }) {
+  const r = 38
+  const cx = 52
+  const cy = 52
+  const strokeW = 20
+  const C = 2 * Math.PI * r
+  const total = rows.reduce((s, row) => s + (row.omGBVM ?? row.gbvM), 0)
+  if (total === 0) return null
+
+  let cumLen = 0
+  return (
+    <svg width="104" height="104" viewBox="0 0 104 104" className="flex-shrink-0">
+      {rows.map((row) => {
+        const val = row.omGBVM ?? row.gbvM
+        const segLen = (val / total) * C
+        const dashOffset = -cumLen
+        cumLen += segLen
+        return (
+          <circle
+            key={row.region}
+            cx={cx} cy={cy} r={r}
+            fill="none"
+            stroke={GEO_COLORS[row.region] ?? "#94a3b8"}
+            strokeWidth={strokeW}
+            strokeDasharray={`${segLen} ${C - segLen}`}
+            strokeDashoffset={dashOffset}
+            style={{ transform: "rotate(-90deg)", transformOrigin: `${cx}px ${cy}px` }}
+          />
+        )
+      })}
+      <circle cx={cx} cy={cy} r={r - strokeW / 2 - 1} fill="white" />
+    </svg>
+  )
 }
 
 function ChevronIcon({ open }: { open: boolean }) {
@@ -293,7 +346,11 @@ function GeoCard({ result }: { result: ExtractionResult }) {
                     className={`border-t border-slate-50 ${hasChildren ? "cursor-pointer hover:bg-slate-50" : ""}`}
                   >
                     <td className="py-2 font-medium text-slate-800">
-                      <span className="flex items-center gap-1">
+                      <span className="flex items-center gap-1.5">
+                        <span
+                          className="inline-block w-2 h-2 rounded-sm flex-shrink-0"
+                          style={{ backgroundColor: GEO_COLORS[row.region] ?? "#94a3b8" }}
+                        />
                         {row.region}
                         {hasChildren && <ChevronIcon open={isOpen} />}
                       </span>
@@ -364,6 +421,29 @@ function GeoCard({ result }: { result: ExtractionResult }) {
             {result.data}
           </p>
         )
+      )}
+
+      {rows.length > 0 && (
+        <div className="flex items-center justify-center gap-6 mt-4 pt-3 border-t border-slate-100">
+          <DonutChart rows={rows} />
+          <div className="space-y-1.5">
+            {rows.map((row) => {
+              const val = row.omGBVM ?? row.gbvM
+              const total = rows.reduce((s, r) => s + (r.omGBVM ?? r.gbvM), 0)
+              const pct = total > 0 ? ((val / total) * 100).toFixed(1) : "—"
+              return (
+                <div key={row.region} className="flex items-center gap-2 text-[11px]">
+                  <span
+                    className="inline-block w-2.5 h-2.5 rounded-sm flex-shrink-0"
+                    style={{ backgroundColor: GEO_COLORS[row.region] ?? "#94a3b8" }}
+                  />
+                  <span className="text-slate-700">{row.region}</span>
+                  <span className="font-medium text-slate-800 tabular-nums ml-auto pl-3">{pct}%</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
       )}
 
       <SourceBlock section={result.section} tableRef={result.tableRef} />
