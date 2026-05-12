@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import type { ExtractionResult, ExtractionId } from "@/types"
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -178,15 +179,30 @@ function TenantCard({ result }: { result: ExtractionResult }) {
 
 // ── Geographic exposure ────────────────────────────────────────────────────
 
-function GeoCard({ result }: { result: ExtractionResult }) {
-  const rows = result.geoRows ?? []
-  const maxGBV = rows.length > 0 ? rows[0].gbvM : 1
+function fmtGBV(n: number) {
+  return n >= 1000 ? `$${(n / 1000).toFixed(1)}B` : `$${n.toLocaleString()}M`
+}
 
-  function fmt(n: number) {
-    return n >= 1000
-      ? `$${(n / 1000).toFixed(1)}B`
-      : `$${n.toLocaleString()}M`
-  }
+function ChevronIcon({ open }: { open: boolean }) {
+  return (
+    <svg
+      className={`w-3.5 h-3.5 text-slate-400 flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      viewBox="0 0 24 24"
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" />
+    </svg>
+  )
+}
+
+function GeoCard({ result }: { result: ExtractionResult }) {
+  const [openRegion, setOpenRegion] = useState<string | null>(null)
+  const rows = result.geoRows ?? []
+
+  const toggle = (region: string) =>
+    setOpenRegion((prev) => (prev === region ? null : region))
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-5 h-full flex flex-col">
@@ -196,30 +212,104 @@ function GeoCard({ result }: { result: ExtractionResult }) {
         </h3>
         <SectionRef section={result.section} />
       </div>
-      <UnitPill unit={result.unit} />
 
-      <div className="mt-3 space-y-2.5 flex-1">
-        {rows.map((row) => (
-          <HBar
-            key={row.region}
-            label={row.region}
-            pct={row.gbvM}
-            maxPct={maxGBV}
-            color="bg-emerald-500"
-            rightLabel={fmt(row.gbvM)}
-          />
-        ))}
-        {rows.length === 0 && result.data && (
-          <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
-            {result.data}
-          </p>
-        )}
+      <div className="flex gap-1.5 mt-1 mb-3 flex-wrap">
+        {result.unit && <UnitPill unit={result.unit} />}
+        <UnitPill unit="sq ft in millions" />
       </div>
 
-      {result.californiaNOIPct != null && (
+      {rows.length > 0 ? (
+        <div className="flex-1 divide-y divide-slate-50">
+          {/* L1 header */}
+          <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-3 pb-1.5 text-[10px] uppercase tracking-wider text-slate-400 font-medium">
+            <span>Region</span>
+            <span className="text-right">Sq Ft</span>
+            <span className="text-right">Consol. GBV</span>
+            <span className="text-right">O&amp;M GBV</span>
+            <span className="text-right">% O&amp;M</span>
+          </div>
+
+          {rows.map((row) => {
+            const isOpen = openRegion === row.region
+            const hasChildren = (row.children ?? []).length > 0
+            return (
+              <div key={row.region}>
+                {/* L1 row */}
+                <button
+                  onClick={() => hasChildren && toggle(row.region)}
+                  className={`w-full grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-3 py-2 text-[12px] text-left ${hasChildren ? "cursor-pointer hover:bg-slate-50" : "cursor-default"}`}
+                >
+                  <span className="flex items-center gap-1 font-medium text-slate-800">
+                    {row.region}
+                    {hasChildren && <ChevronIcon open={isOpen} />}
+                  </span>
+                  <span className="text-right text-slate-600">
+                    {row.sqftM != null ? `${row.sqftM}M` : "—"}
+                  </span>
+                  <span className="text-right text-slate-600">
+                    {fmtGBV(row.gbvM)}
+                  </span>
+                  <span className="text-right text-slate-600">
+                    {row.omGBVM != null ? fmtGBV(row.omGBVM) : "—"}
+                  </span>
+                  <span className="text-right font-semibold text-slate-800">
+                    {row.omPct != null ? `${row.omPct}%` : "—"}
+                  </span>
+                </button>
+
+                {/* L2 rows */}
+                {isOpen && (row.children ?? []).length > 0 && (
+                  <div className="bg-slate-50 rounded-lg mb-1 divide-y divide-slate-100">
+                    <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 px-3 py-1 text-[10px] uppercase tracking-wider text-slate-400 font-medium">
+                      <span>Market</span>
+                      <span className="text-right">Sq Ft</span>
+                      <span className="text-right">O&amp;M GBV</span>
+                      <span className="text-right">% of Region</span>
+                    </div>
+                    {(row.children ?? []).map((child) => {
+                      const regionBase = row.omGBVM ?? row.gbvM
+                      const pct = regionBase > 0
+                        ? ((child.gbvM / regionBase) * 100).toFixed(1)
+                        : "—"
+                      return (
+                        <div
+                          key={child.market}
+                          className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 px-3 py-1.5 text-[11px]"
+                        >
+                          <span className="text-slate-700">{child.market}</span>
+                          <span className="text-right text-slate-500">
+                            {child.sqftM != null ? `${child.sqftM}M` : "—"}
+                          </span>
+                          <span className="text-right text-slate-500">
+                            {fmtGBV(child.gbvM)}
+                          </span>
+                          <span className="text-right text-slate-600 font-medium">
+                            {pct}%
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      ) : (
+        result.data && (
+          <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed flex-1">
+            {result.data}
+          </p>
+        )
+      )}
+
+      {/* California callout */}
+      {(result.californiaNOIPct != null || result.californiaGBVM != null) && (
         <div className="mt-3">
           <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium bg-amber-50 text-amber-700">
-            California: {result.californiaNOIPct}% of consolidated NOI
+            California
+            {result.californiaGBVM != null && ` = ${fmtGBV(result.californiaGBVM)}`}
+            {result.californiaNOIPct != null && ` · ${result.californiaNOIPct}% of consolidated NOI`}
           </span>
         </div>
       )}
@@ -235,8 +325,10 @@ function DebtCard({ result }: { result: ExtractionResult }) {
   const rows = result.debtRows ?? []
   const dataRows = rows.filter((r) => r.year !== "Total")
   const totalRow = rows.find((r) => r.year === "Total")
+  const hasSenior = rows.some((r) => r.seniorK != null)
 
-  function fmtAmt(k: number) {
+  function fmtAmt(k: number | null | undefined) {
+    if (k == null) return "—"
     return k.toLocaleString()
   }
 
@@ -262,26 +354,40 @@ function DebtCard({ result }: { result: ExtractionResult }) {
           <table className="w-full text-[12px]">
             <thead>
               <tr className="border-b border-slate-100">
-                <th className="text-left text-[10px] uppercase tracking-wider text-slate-400 pb-1.5 font-medium">
-                  Year
-                </th>
-                <th className="text-right text-[10px] uppercase tracking-wider text-slate-400 pb-1.5 font-medium">
-                  Amount
-                </th>
+                <th className="text-left text-[10px] uppercase tracking-wider text-slate-400 pb-1.5 font-medium">Year</th>
+                {hasSenior && (
+                  <th className="text-right text-[10px] uppercase tracking-wider text-slate-400 pb-1.5 font-medium">Senior Notes</th>
+                )}
+                {hasSenior && (
+                  <th className="text-right text-[10px] uppercase tracking-wider text-slate-400 pb-1.5 font-medium">Term Loans</th>
+                )}
+                <th className="text-right text-[10px] uppercase tracking-wider text-slate-400 pb-1.5 font-medium">Total</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {dataRows.map((row) => (
                 <tr key={row.year}>
-                  <td className="py-1.5 text-slate-700 flex items-center gap-1.5">
-                    {row.year}
-                    {row.year === "2025" && (
-                      <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-100 text-red-600">
-                        near term
-                      </span>
-                    )}
+                  <td className="py-1.5 text-slate-700">
+                    <span className="flex items-center gap-1.5">
+                      {row.year}
+                      {row.year === "2025" && (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-100 text-red-600">
+                          near term
+                        </span>
+                      )}
+                    </span>
                   </td>
-                  <td className="py-1.5 text-right font-mono text-slate-700">
+                  {hasSenior && (
+                    <td className="py-1.5 text-right font-mono text-slate-600">
+                      {fmtAmt(row.seniorK)}
+                    </td>
+                  )}
+                  {hasSenior && (
+                    <td className="py-1.5 text-right font-mono text-slate-600">
+                      {fmtAmt(row.termLoanK)}
+                    </td>
+                  )}
+                  <td className="py-1.5 text-right font-mono font-medium text-slate-800">
                     {fmtAmt(row.amountK)}
                   </td>
                 </tr>
@@ -291,6 +397,16 @@ function DebtCard({ result }: { result: ExtractionResult }) {
               <tfoot>
                 <tr className="border-t-2 border-slate-200">
                   <td className="pt-2 font-semibold text-slate-800">Total</td>
+                  {hasSenior && (
+                    <td className="pt-2 text-right font-mono font-semibold text-slate-700">
+                      {fmtAmt(totalRow.seniorK)}
+                    </td>
+                  )}
+                  {hasSenior && (
+                    <td className="pt-2 text-right font-mono font-semibold text-slate-700">
+                      {fmtAmt(totalRow.termLoanK)}
+                    </td>
+                  )}
                   <td className="pt-2 text-right font-mono font-semibold text-slate-800">
                     {fmtAmt(totalRow.amountK)}
                   </td>
@@ -307,6 +423,13 @@ function DebtCard({ result }: { result: ExtractionResult }) {
         )}
       </div>
 
+      {result.footnote && (
+        <div className="flex gap-2 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 mt-3">
+          <span className="text-blue-400 flex-shrink-0 text-xs mt-0.5">ⓘ</span>
+          <p className="text-[12px] text-blue-700 leading-relaxed">{result.footnote}</p>
+        </div>
+      )}
+
       <SourceBlock section={result.section} tableRef={result.tableRef} />
     </div>
   )
@@ -315,7 +438,10 @@ function DebtCard({ result }: { result: ExtractionResult }) {
 // ── Lease expirations ──────────────────────────────────────────────────────
 
 function LeaseCard({ result }: { result: ExtractionResult }) {
-  const rows = result.leaseRows ?? []
+  const allRows = result.leaseRows ?? []
+  const dataRows = allRows.filter((r) => r.year !== "Total")
+  const totalRow = allRows.find((r) => r.year === "Total")
+  const hasPsf = allRows.some((r) => r.psf != null)
   const has24m =
     result.lease24mSqftM != null &&
     result.lease24mNerM != null &&
@@ -347,7 +473,7 @@ function LeaseCard({ result }: { result: ExtractionResult }) {
       )}
 
       <div className="flex-1">
-        {rows.length > 0 ? (
+        {allRows.length > 0 ? (
           <table className="w-full text-[12px]">
             <thead>
               <tr className="border-b border-slate-100">
@@ -355,18 +481,41 @@ function LeaseCard({ result }: { result: ExtractionResult }) {
                 <th className="text-right text-[10px] uppercase tracking-wider text-slate-400 pb-1.5 font-medium">Sq Ft</th>
                 <th className="text-right text-[10px] uppercase tracking-wider text-slate-400 pb-1.5 font-medium">NER $M</th>
                 <th className="text-right text-[10px] uppercase tracking-wider text-slate-400 pb-1.5 font-medium">%</th>
+                {hasPsf && (
+                  <th className="text-right text-[10px] uppercase tracking-wider text-slate-400 pb-1.5 font-medium">$/sq ft</th>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {rows.map((row) => (
+              {dataRows.map((row) => (
                 <tr key={row.year}>
                   <td className="py-1.5 text-slate-700">{row.year}</td>
                   <td className="py-1.5 text-right text-slate-700">{row.sqftM}M</td>
                   <td className="py-1.5 text-right text-slate-700">${row.nerM}M</td>
                   <td className="py-1.5 text-right font-medium text-slate-700">{row.pct}%</td>
+                  {hasPsf && (
+                    <td className="py-1.5 text-right text-slate-600">
+                      {row.psf != null ? `$${row.psf.toFixed(2)}` : "—"}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
+            {totalRow && (
+              <tfoot>
+                <tr className="border-t-2 border-slate-200">
+                  <td className="pt-2 font-semibold text-slate-800">Total</td>
+                  <td className="pt-2 text-right font-semibold text-slate-800">{totalRow.sqftM}M</td>
+                  <td className="pt-2 text-right font-semibold text-slate-800">${totalRow.nerM}M</td>
+                  <td className="pt-2 text-right font-semibold text-slate-800">{totalRow.pct}%</td>
+                  {hasPsf && (
+                    <td className="pt-2 text-right font-semibold text-slate-800">
+                      {totalRow.psf != null ? `$${totalRow.psf.toFixed(2)}` : "—"}
+                    </td>
+                  )}
+                </tr>
+              </tfoot>
+            )}
           </table>
         ) : (
           result.data && (

@@ -13,14 +13,26 @@ export interface TenantRow {
   pct: number
 }
 
+export interface GeoL2Row {
+  market: string
+  sqftM: number
+  gbvM: number // O&M GBV in $M
+}
+
 export interface GeoRow {
   region: string
-  gbvM: number
+  gbvM: number       // consolidated GBV in $M (kept for compat)
+  sqftM?: number     // consolidated sq ft in millions
+  omGBVM?: number    // O&M GBV in $M
+  omPct?: number     // % of total O&M portfolio
+  children?: GeoL2Row[]
 }
 
 export interface DebtRow {
   year: string
-  amountK: number
+  amountK: number         // Total column
+  seniorK?: number        // Senior notes column
+  termLoanK?: number | null // Term loans column (null = "—")
 }
 
 export interface LeaseRow {
@@ -28,6 +40,7 @@ export interface LeaseRow {
   sqftM: number
   nerM: number
   pct: number
+  psf?: number  // $ per sq ft
 }
 
 // ── Extraction result ──────────────────────────────────────────────────────
@@ -48,6 +61,7 @@ export interface ExtractionResult {
   tenantTop25Pct?: number
   geoRows?: GeoRow[]
   californiaNOIPct?: number
+  californiaGBVM?: number
   debtRows?: DebtRow[]
   leaseRows?: LeaseRow[]
   lease24mSqftM?: number

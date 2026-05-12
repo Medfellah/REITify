@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk"
-import type { ExtractionId, ExtractionResult, TenantRow, GeoRow, DebtRow, LeaseRow } from "@/types"
+import type { ExtractionId, ExtractionResult, TenantRow, GeoRow, GeoL2Row, DebtRow, LeaseRow } from "@/types"
 import type { AnchorSpec } from "@/lib/anchor-nav"
 
 const client = new Anthropic()
@@ -22,6 +22,7 @@ export interface LLMResponse {
   top25Pct?: number
   geoRows?: GeoRow[]
   californiaNOIPct?: number
+  californiaGBVM?: number
   debtRows?: DebtRow[]
   leaseRows?: LeaseRow[]
   lease24mSqftM?: number
@@ -87,7 +88,7 @@ FILING TEXT:
     },
     prompt: `Extract the geographic exposure breakdown from this REIT 10-K filing section.
 
-Find: The table showing portfolio breakdown by geographic region, market, or state. This is typically labelled "Geographic Distribution" and shows Rentable Square Footage and Gross Book Value by region.
+Find: The table showing portfolio breakdown by geographic region and market. Typically labelled "Geographic Distribution" and shows Rentable Square Footage and Gross Book Value for both Consolidated and O&M (Operating & Management) portfolios by region and market.
 
 Respond with ONLY a valid JSON object — no preamble, no markdown:
 {
@@ -99,11 +100,29 @@ Respond with ONLY a valid JSON object — no preamble, no markdown:
   "tableRef": "Table name and period, e.g. 'Geographic Distribution Table, December 31, 2024'",
   "footnote": null,
   "geoRows": [
-    {"region": "U.S.", "gbvM": 75770},
-    {"region": "Other Americas", "gbvM": 1306},
-    {"region": "Europe", "gbvM": 768},
-    {"region": "Asia", "gbvM": 406}
+    {
+      "region": "U.S.",
+      "sqftM": 731,
+      "gbvM": 78244,
+      "omGBVM": 90671,
+      "omPct": 67.4,
+      "children": [
+        {"market": "Southern California", "sqftM": 117, "gbvM": 18123},
+        {"market": "Northern California", "sqftM": 58, "gbvM": 9012}
+      ]
+    },
+    {
+      "region": "Europe",
+      "sqftM": 143,
+      "gbvM": 18500,
+      "omGBVM": 26503,
+      "omPct": 19.7,
+      "children": [
+        {"market": "Germany", "sqftM": 45, "gbvM": 8200}
+      ]
+    }
   ],
+  "californiaGBVM": 24000,
   "californiaNOIPct": 31.8
 }
 
@@ -114,8 +133,10 @@ RULES:
 - citation must be VERBATIM — no paraphrasing
 - Include the complete table in the citation
 - Only return found: true if you have a specific verbatim citation
-- geoRows: use consolidated Gross Book Value figures in millions for the top-level geographic regions only (U.S., Other Americas, Europe, Asia) — not individual markets
-- californiaNOIPct: California's percentage of consolidated NOI if stated in the text; null otherwise
+- geoRows: top-level entries are the 4 major regions (U.S., Other Americas, Europe, Asia). gbvM = consolidated GBV, omGBVM = O&M GBV (both in $M). omPct = O&M GBV as % of total O&M portfolio GBV. sqftM = consolidated sq ft in millions.
+- children: all individual markets/countries within each region from the table. gbvM for children = O&M GBV in $M. sqftM in millions.
+- californiaGBVM: California's O&M GBV in $M if determinable; null otherwise
+- californiaNOIPct: California's percentage of consolidated NOI if stated; null otherwise
 
 FILING TEXT:
 {text}`,
@@ -129,25 +150,25 @@ FILING TEXT:
     },
     prompt: `Extract the debt maturity schedule from this REIT 10-K filing section.
 
-Find: The table of scheduled debt principal payments due by year. Look for "Long-Term Debt Maturities" and "Scheduled principal payments due on our debt for each year."
+Find: The table of scheduled debt principal payments due by year, broken down by debt type. Look for "Long-Term Debt Maturities" and "Scheduled principal payments due on our debt for each year." The table typically has columns for Senior Notes, Term Loans / Secured Mortgage Notes, and a Total.
 
 Respond with ONLY a valid JSON object — no preamble, no markdown:
 {
   "found": true,
-  "data": "Year-by-year debt maturities EXACTLY as they appear in the Total column — one row per line (e.g. '2025: 514,223'). Include the 'Thereafter' and 'Total' rows if present.",
+  "data": "Year-by-year debt maturities with breakdown — one row per line (e.g. '2025: Senior $31,856 / Term Loans $308,978 / Total $514,223'). Include 'Thereafter' and 'Total'/'Subtotal' rows.",
   "unit": "Unit label EXACTLY as stated in the filing header (e.g. 'in thousands'). Shown once as a badge.",
   "citation": "Exact word-for-word copy of the full maturity table from the filing",
   "section": "Full section path, e.g. 'Item 8. Financial Statements — Long-Term Debt Maturities'",
   "tableRef": "Table name and period, e.g. 'Long-Term Debt Maturities, December 31, 2024'",
-  "footnote": null,
+  "footnote": "Any footnote about specific loans (e.g. Canadian or Chinese term loans, extension options). Verbatim or close paraphrase. Null if absent.",
   "debtRows": [
-    {"year": "2025", "amountK": 514223},
-    {"year": "2026", "amountK": 2173492},
-    {"year": "2027", "amountK": 2010418},
-    {"year": "2028", "amountK": 2616044},
-    {"year": "2029", "amountK": 3196321},
-    {"year": "Thereafter", "amountK": 20939411},
-    {"year": "Total", "amountK": 31449909}
+    {"year": "2025", "seniorK": 31856, "termLoanK": 308978, "amountK": 514223},
+    {"year": "2026", "seniorK": 1284618, "termLoanK": 680700, "amountK": 2173492},
+    {"year": "2027", "seniorK": 1898055, "termLoanK": 45873, "amountK": 2010418},
+    {"year": "2028", "seniorK": 2518708, "termLoanK": 94295, "amountK": 2616044},
+    {"year": "2029", "seniorK": 3193130, "termLoanK": null, "amountK": 3196321},
+    {"year": "Thereafter", "seniorK": 19969920, "termLoanK": 886588, "amountK": 20939411},
+    {"year": "Total", "seniorK": 28896287, "termLoanK": 2016434, "amountK": 31449909}
   ]
 }
 
@@ -156,9 +177,10 @@ If this data is not present in the provided text:
 
 RULES:
 - citation must be VERBATIM — no paraphrasing
-- debtRows: use the Total column figures (sum across debt types); amountK is the raw number in whatever unit the table uses (thousands if "in thousands")
+- debtRows: amountK is the Total column; seniorK and termLoanK are the individual debt type columns. Use null for termLoanK when the year has no term loan maturities (shows "—" or 0 in the filing).
 - Do NOT add unit labels to individual debtRows — the unit field handles that
-- Include "Total" row in debtRows if present
+- Include the "Total" or "Subtotal" row in debtRows with year="Total"
+- footnote: capture any note about specific term loans, extension options, or variable-rate details
 
 FILING TEXT:
 {text}`,
@@ -172,20 +194,25 @@ FILING TEXT:
     },
     prompt: `Extract the lease expiration schedule from this REIT 10-K filing section.
 
-Find: The table of lease expirations, typically labelled "Lease Expirations" and described as summarizing "leases in place" at year-end.
+Find: The table of lease expirations, typically labelled "Lease Expirations" and described as summarizing "leases in place" at year-end. Columns typically include: year, sq ft expiring, NER expiring ($M), % of total NER, and NER per sq ft ($/sq ft).
 
 Respond with ONLY a valid JSON object — no preamble, no markdown:
 {
   "found": true,
-  "data": "Lease expiration schedule for the nearest 24 months — one year per line. Include sq ft, NER expiring ($M), and % of total NER where available.",
+  "data": "Full lease expiration schedule — one year per line. Include sq ft, NER expiring ($M), % of total NER, and $/sq ft where available.",
   "unit": null,
   "citation": "Exact word-for-word copy of the full lease expiration table from the filing",
   "section": "Full section path, e.g. 'Item 2. Properties — Lease Expirations'",
   "tableRef": "Table name and period, e.g. 'Lease Expirations Table, December 31, 2024'",
   "footnote": "Any important note from the filing about re-signed, renewed, or excluded leases (verbatim or close paraphrase). Null if no such note exists.",
   "leaseRows": [
-    {"year": "2025", "sqftM": 58, "nerM": 430, "pct": 8.0},
-    {"year": "2026", "sqftM": 95, "nerM": 715, "pct": 13.3}
+    {"year": "2025", "sqftM": 58, "nerM": 430, "pct": 8.0, "psf": 7.41},
+    {"year": "2026", "sqftM": 95, "nerM": 715, "pct": 13.3, "psf": 7.53},
+    {"year": "2027", "sqftM": 101, "nerM": 820, "pct": 15.3, "psf": 8.12},
+    {"year": "2028", "sqftM": 85, "nerM": 775, "pct": 14.5, "psf": 9.12},
+    {"year": "2029", "sqftM": 78, "nerM": 744, "pct": 13.9, "psf": 9.54},
+    {"year": "Thereafter", "sqftM": 35, "nerM": 437, "pct": 8.1, "psf": 12.49},
+    {"year": "Total", "sqftM": 611, "nerM": 5363, "pct": 100.0, "psf": 8.78}
   ],
   "lease24mSqftM": 153,
   "lease24mNerM": 1145,
@@ -197,8 +224,8 @@ If this data is not present in the provided text:
 
 RULES:
 - citation must be VERBATIM — no paraphrasing
-- leaseRows: include only the nearest 2 expiration years
-- lease24m*: sum of the nearest 2 years; compute if not explicitly stated
+- leaseRows: include ALL years in the table (typically 2025 through Thereafter) plus a "Total" row. Include psf (NER per sq ft in $/sq ft) if the table shows it.
+- lease24m*: sum of the nearest 2 expiration years (2025 + 2026); compute if not explicitly stated
 - Capture the re-signed/renewed leases footnote in the footnote field if present
 
 FILING TEXT:
@@ -300,6 +327,7 @@ export async function runExtraction(
     tenantTop25Pct: parsed.top25Pct,
     geoRows: parsed.geoRows,
     californiaNOIPct: parsed.californiaNOIPct,
+    californiaGBVM: parsed.californiaGBVM,
     debtRows: parsed.debtRows,
     leaseRows: parsed.leaseRows,
     lease24mSqftM: parsed.lease24mSqftM,
