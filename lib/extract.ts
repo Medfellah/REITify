@@ -222,24 +222,40 @@ export async function runExtraction(
 ): Promise<ExtractionResult> {
   const userPrompt = config.prompt.replace("{text}", chunk)
 
-  let raw: string
+  let raw: string = ""
   let tokensIn = 0
   let tokensOut = 0
 
-  try {
-    const message = await client.messages.create({
-      model: MODEL_ID,
-      max_tokens: 4096,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: userPrompt }],
-    })
-    raw = message.content
-      .filter((b) => b.type === "text")
-      .map((b) => (b as { type: "text"; text: string }).text)
-      .join("")
-    tokensIn = message.usage.input_tokens
-    tokensOut = message.usage.output_tokens
-  } catch (err) {
+  const MAX_RETRIES = 4
+  let lastErr: unknown
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      await new Promise((r) => setTimeout(r, 2 ** attempt * 1000))
+    }
+    try {
+      const message = await client.messages.create({
+        model: MODEL_ID,
+        max_tokens: 8192,
+        system: SYSTEM_PROMPT,
+        messages: [{ role: "user", content: userPrompt }],
+      })
+      raw = message.content
+        .filter((b) => b.type === "text")
+        .map((b) => (b as { type: "text"; text: string }).text)
+        .join("")
+      tokensIn = message.usage.input_tokens
+      tokensOut = message.usage.output_tokens
+      lastErr = null
+      break
+    } catch (err) {
+      const status = (err as { status?: number }).status
+      lastErr = err
+      if (status !== 529 && status !== 503) break
+    }
+  }
+
+  if (lastErr !== null && lastErr !== undefined) {
     return {
       id: config.id,
       title: config.title,
@@ -249,7 +265,7 @@ export async function runExtraction(
       tableRef: null,
       unit: null,
       footnote: null,
-      error: `API error: ${err instanceof Error ? err.message : String(err)}`,
+      error: `API error: ${lastErr instanceof Error ? lastErr.message : String(lastErr)}`,
     }
   }
 
