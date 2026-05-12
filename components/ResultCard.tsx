@@ -128,7 +128,14 @@ function HBar({
 
 function TenantCard({ result }: { result: ExtractionResult }) {
   const rows = result.tenantRows ?? []
-  const maxPct = rows.length > 0 ? rows[0].pct : 1
+  const hasSqft = rows.some((r) => r.sqftM != null)
+  const top10SqftM = rows.slice(0, 10).reduce((s, r) => s + (r.sqftM ?? 0), 0)
+  const top25SqftM = rows.reduce((s, r) => s + (r.sqftM ?? 0), 0)
+  const hasMetrics =
+    result.tenantTop10Pct != null ||
+    result.tenantTop25Pct != null ||
+    top10SqftM > 0 ||
+    top25SqftM > 0
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl p-5 h-full flex flex-col">
@@ -140,34 +147,68 @@ function TenantCard({ result }: { result: ExtractionResult }) {
       </div>
       <UnitPill unit={result.unit} />
 
-      <div className="mt-3 space-y-2.5 flex-1">
-        {rows.slice(0, 10).map((row) => (
-          <HBar
-            key={row.rank}
-            label={`${row.rank}. ${row.name}`}
-            pct={row.pct}
-            maxPct={maxPct}
-            color="bg-blue-500"
-          />
-        ))}
-        {rows.length === 0 && result.data && (
-          <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
-            {result.data}
-          </p>
+      <div className="mt-3 flex-1">
+        {rows.length > 0 ? (
+          <table className="w-full text-[12px]">
+            <thead>
+              <tr className="border-b border-slate-100">
+                <th className="text-left text-[10px] uppercase tracking-wider text-slate-400 pb-1.5 font-medium w-6">#</th>
+                <th className="text-left text-[10px] uppercase tracking-wider text-slate-400 pb-1.5 font-medium">Tenant</th>
+                {hasSqft && (
+                  <th className="text-right text-[10px] uppercase tracking-wider text-slate-400 pb-1.5 font-medium">Sq Ft</th>
+                )}
+                <th className="text-right text-[10px] uppercase tracking-wider text-slate-400 pb-1.5 font-medium">% NER</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {rows.map((row) => (
+                <tr key={row.rank}>
+                  <td className="py-1 text-slate-400 text-[11px]">{row.rank}</td>
+                  <td className="py-1 text-slate-700">{row.name}</td>
+                  {hasSqft && (
+                    <td className="py-1 text-right text-slate-600">
+                      {row.sqftM != null ? `${row.sqftM}M` : "—"}
+                    </td>
+                  )}
+                  <td className="py-1 text-right font-medium text-slate-800">{row.pct}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          result.data && (
+            <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
+              {result.data}
+            </p>
+          )
         )}
       </div>
 
-      {(result.tenantTop10Pct != null || result.tenantTop25Pct != null) && (
-        <div className="flex gap-2 mt-3">
+      {hasMetrics && (
+        <div className="grid grid-cols-4 gap-1.5 mt-3">
           {result.tenantTop10Pct != null && (
-            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium bg-blue-50 text-blue-700">
-              Top 10: {result.tenantTop10Pct}%
-            </span>
+            <div className="bg-blue-50 rounded-lg p-2 text-center">
+              <p className="text-[10px] text-blue-600 font-medium uppercase tracking-wide leading-tight">Top 10 NER</p>
+              <p className="text-sm font-bold text-blue-800 mt-0.5">{result.tenantTop10Pct}%</p>
+            </div>
+          )}
+          {top10SqftM > 0 && (
+            <div className="bg-blue-50 rounded-lg p-2 text-center">
+              <p className="text-[10px] text-blue-600 font-medium uppercase tracking-wide leading-tight">Top 10 sq ft</p>
+              <p className="text-sm font-bold text-blue-800 mt-0.5">{top10SqftM}M</p>
+            </div>
           )}
           {result.tenantTop25Pct != null && (
-            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium bg-blue-50 text-blue-700">
-              Top 25: {result.tenantTop25Pct}%
-            </span>
+            <div className="bg-blue-50 rounded-lg p-2 text-center">
+              <p className="text-[10px] text-blue-600 font-medium uppercase tracking-wide leading-tight">Top 25 NER</p>
+              <p className="text-sm font-bold text-blue-800 mt-0.5">{result.tenantTop25Pct}%</p>
+            </div>
+          )}
+          {top25SqftM > 0 && (
+            <div className="bg-blue-50 rounded-lg p-2 text-center">
+              <p className="text-[10px] text-blue-600 font-medium uppercase tracking-wide leading-tight">Top 25 sq ft</p>
+              <p className="text-sm font-bold text-blue-800 mt-0.5">{top25SqftM}M</p>
+            </div>
           )}
         </div>
       )}
@@ -195,6 +236,13 @@ function ChevronIcon({ open }: { open: boolean }) {
       <path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" />
     </svg>
   )
+}
+
+const OM_REGIONAL_TOTAL: Record<string, number> = {
+  "U.S.": 90734,
+  "Europe": 26477,
+  "Asia": 10084,
+  "Other Americas": 7232,
 }
 
 function GeoCard({ result }: { result: ExtractionResult }) {
@@ -258,39 +306,50 @@ function GeoCard({ result }: { result: ExtractionResult }) {
                 </button>
 
                 {/* L2 rows */}
-                {isOpen && (row.children ?? []).length > 0 && (
-                  <div className="bg-slate-50 rounded-lg mb-1 divide-y divide-slate-100">
-                    <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 px-3 py-1 text-[10px] uppercase tracking-wider text-slate-400 font-medium">
-                      <span>Market</span>
-                      <span className="text-right">Sq Ft</span>
-                      <span className="text-right">O&amp;M GBV</span>
-                      <span className="text-right">% of Region</span>
+                {isOpen && (row.children ?? []).length > 0 && (() => {
+                  const sortedChildren = [...(row.children ?? [])].sort((a, b) => b.gbvM - a.gbvM)
+                  const hasConsol = sortedChildren.some((c) => c.consolidatedGBVM != null)
+                  const regionTotal = OM_REGIONAL_TOTAL[row.region] ?? (row.omGBVM ?? row.gbvM)
+                  const cols = hasConsol ? "[1fr_auto_auto_auto_auto]" : "[1fr_auto_auto_auto]"
+                  return (
+                    <div className="bg-slate-50 rounded-lg mb-1 divide-y divide-slate-100">
+                      <div className={`grid grid-cols-${cols} gap-x-3 px-3 py-1 text-[10px] uppercase tracking-wider text-slate-400 font-medium`}>
+                        <span>Market</span>
+                        <span className="text-right">Sq Ft</span>
+                        {hasConsol && <span className="text-right">Consol. GBV</span>}
+                        <span className="text-right">O&amp;M GBV</span>
+                        <span className="text-right">% of Region</span>
+                      </div>
+                      {sortedChildren.map((child) => {
+                        const pct = regionTotal > 0
+                          ? ((child.gbvM / regionTotal) * 100).toFixed(1)
+                          : "—"
+                        return (
+                          <div
+                            key={child.market}
+                            className={`grid grid-cols-${cols} gap-x-3 px-3 py-1.5 text-[11px]`}
+                          >
+                            <span className="text-slate-700">{child.market}</span>
+                            <span className="text-right text-slate-500">
+                              {child.sqftM != null ? `${child.sqftM}M` : "—"}
+                            </span>
+                            {hasConsol && (
+                              <span className="text-right text-slate-500">
+                                {child.consolidatedGBVM != null ? fmtGBV(child.consolidatedGBVM) : "—"}
+                              </span>
+                            )}
+                            <span className="text-right text-slate-500">
+                              {fmtGBV(child.gbvM)}
+                            </span>
+                            <span className="text-right text-slate-600 font-medium">
+                              {pct}%
+                            </span>
+                          </div>
+                        )
+                      })}
                     </div>
-                    {[...(row.children ?? [])].sort((a, b) => b.gbvM - a.gbvM).map((child) => {
-                      const regionBase = row.omGBVM ?? row.gbvM
-                      const pct = regionBase > 0
-                        ? ((child.gbvM / regionBase) * 100).toFixed(1)
-                        : "—"
-                      return (
-                        <div
-                          key={child.market}
-                          className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 px-3 py-1.5 text-[11px]"
-                        >
-                          <span className="text-slate-700">{child.market}</span>
-                          <span className="text-right text-slate-500">
-                            {child.sqftM != null ? `${child.sqftM}M` : "—"}
-                          </span>
-                          <span className="text-right text-slate-500">
-                            {fmtGBV(child.gbvM)}
-                          </span>
-                          <span className="text-right text-slate-600 font-medium">
-                            {pct}%
-                          </span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
+                  )
+                })()}
               </div>
             )
           })}
@@ -301,17 +360,6 @@ function GeoCard({ result }: { result: ExtractionResult }) {
             {result.data}
           </p>
         )
-      )}
-
-      {/* California callout */}
-      {(result.californiaNOIPct != null || result.californiaGBVM != null) && (
-        <div className="mt-3">
-          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium bg-amber-50 text-amber-700">
-            California
-            {result.californiaGBVM != null && ` = ${fmtGBV(result.californiaGBVM)}`}
-            {result.californiaNOIPct != null && ` · ${result.californiaNOIPct}% of consolidated NOI`}
-          </span>
-        </div>
       )}
 
       <SourceBlock section={result.section} tableRef={result.tableRef} />

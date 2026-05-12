@@ -16,7 +16,8 @@ export interface TenantRow {
 export interface GeoL2Row {
   market: string
   sqftM: number
-  gbvM: number // O&M GBV in $M
+  gbvM: number           // O&M GBV in $M
+  consolidatedGBVM?: number // consolidated GBV in $M
 }
 
 export interface GeoRow {

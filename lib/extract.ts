@@ -107,8 +107,8 @@ Respond with ONLY a valid JSON object — no preamble, no markdown:
       "omGBVM": 90671,
       "omPct": 67.4,
       "children": [
-        {"market": "Southern California", "sqftM": 117, "gbvM": 18123},
-        {"market": "Northern California", "sqftM": 58, "gbvM": 9012}
+        {"market": "Southern California", "sqftM": 117, "consolidatedGBVM": 18323, "gbvM": 20702},
+        {"market": "Northern California", "sqftM": 58, "consolidatedGBVM": 9012, "gbvM": 10500}
       ]
     },
     {
@@ -134,7 +134,7 @@ RULES:
 - Include the complete table in the citation
 - Only return found: true if you have a specific verbatim citation
 - geoRows: top-level entries are the 4 major regions (U.S., Other Americas, Europe, Asia). gbvM = consolidated GBV, omGBVM = O&M GBV (both in $M). omPct = O&M GBV as % of total O&M portfolio GBV. sqftM = consolidated sq ft in millions.
-- children: all individual markets/countries within each region from the table. gbvM for children = O&M GBV in $M. sqftM in millions.
+- children: all individual markets/countries within each region from the table. gbvM = O&M GBV in $M. consolidatedGBVM = consolidated GBV in $M. sqftM in millions.
 - californiaGBVM: California's O&M GBV in $M if determinable; null otherwise
 - californiaNOIPct: California's percentage of consolidated NOI if stated; null otherwise
 
@@ -180,7 +180,7 @@ RULES:
 - debtRows: amountK is the Total column; seniorK and termLoanK are the individual debt type columns. Use null for termLoanK when the year has no term loan maturities (shows "—" or 0 in the filing).
 - Do NOT add unit labels to individual debtRows — the unit field handles that
 - Include the "Total" or "Subtotal" row in debtRows with year="Total"
-- footnote: capture any note about specific term loans, extension options, or variable-rate details
+- footnote: Condense any term loan notes into this format: "[Year] includes [Loan Name] ($[amount]M, extendable to [year]) and [Loan Name] ($[amount]M, extendable to [year]). [Year] includes [Facility Name] ($[amount]M, extendable to [year])." Include only loans with extension options. Null if no such notes exist.
 
 FILING TEXT:
 {text}`,
