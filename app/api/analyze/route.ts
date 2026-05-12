@@ -1,9 +1,9 @@
-import { validateFilingUrl, fetchAndClean } from "@/lib/fetch-filing"
+import { validateFilingUrl, fetchRaw, cleanHtml } from "@/lib/fetch-filing"
+import { extractFilingMeta } from "@/lib/extract-meta"
 import { extractByAnchor } from "@/lib/anchor-nav"
-import { EXTRACTION_CONFIGS, runExtraction } from "@/lib/extract"
-import type { SSEPayload } from "@/types"
+import { EXTRACTION_CONFIGS, MODEL_ID, runExtraction } from "@/lib/extract"
+import type { SSEPayload, RunStats } from "@/types"
 
-// Requires Vercel Pro; Hobby plan caps at 60s which may be tight for large filings
 export const maxDuration = 300
 
 export async function POST(req: Request) {
@@ -26,9 +26,9 @@ export async function POST(req: Request) {
           return
         }
 
-        let cleanText: string
+        let rawHtml: string
         try {
-          cleanText = await fetchAndClean(url)
+          rawHtml = await fetchRaw(url)
         } catch (err) {
           send({
             type: "fatal",
@@ -38,14 +38,31 @@ export async function POST(req: Request) {
           return
         }
 
+        // Extract company metadata and emit immediately
+        const meta = await extractFilingMeta(rawHtml, url)
+        send({ type: "filing_meta", meta })
+
+        const cleanText = cleanHtml(rawHtml)
+        const startTime = Date.now()
+        let totalTokensIn = 0
+        let totalTokensOut = 0
+
         for (const config of EXTRACTION_CONFIGS) {
           send({ type: "extraction_start", id: config.id })
           const chunk = extractByAnchor(cleanText, config.anchorSpec)
           const result = await runExtraction(config, chunk)
+          totalTokensIn += result.tokensIn ?? 0
+          totalTokensOut += result.tokensOut ?? 0
           send({ type: "extraction_result", id: config.id, result })
         }
 
-        send({ type: "done" })
+        const stats: RunStats = {
+          durationMs: Date.now() - startTime,
+          model: MODEL_ID,
+          totalTokensIn,
+          totalTokensOut,
+        }
+        send({ type: "done", stats })
       } catch (err) {
         send({
           type: "fatal",

@@ -16,7 +16,7 @@ export function validateFilingUrl(url: string): string | null {
   return null
 }
 
-export async function fetchAndClean(url: string): Promise<string> {
+async function doFetch(url: string): Promise<string> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 60_000)
 
@@ -39,32 +39,30 @@ export async function fetchAndClean(url: string): Promise<string> {
     throw new Error(`Failed to fetch filing: HTTP ${response.status}`)
   }
 
-  const rawHtml = await response.text()
-  return cleanHtml(rawHtml)
+  return response.text()
 }
 
-function cleanHtml(rawHtml: string): string {
+export async function fetchRaw(url: string): Promise<string> {
+  return doFetch(url)
+}
+
+export function cleanHtml(rawHtml: string): string {
   const root = parse(rawHtml)
 
-  // Remove non-content elements
   root
     .querySelectorAll("script, style, nav, header, footer, iframe, noscript")
     .forEach((el) => el.remove())
 
   let html = root.toString()
 
-  // Preserve table rows as tab-separated lines
   html = html.replace(/<\/tr>/gi, "\n")
   html = html.replace(/<\/t[dh]>/gi, "\t")
   html = html.replace(/<br\s*\/?>/gi, "\n")
   html = html.replace(/<\/p>/gi, "\n\n")
   html = html.replace(/<\/div>/gi, "\n")
   html = html.replace(/<\/h[1-6]>/gi, "\n\n")
-
-  // Strip all remaining tags
   html = html.replace(/<[^>]+>/g, "")
 
-  // Decode HTML entities
   html = html
     .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
@@ -76,11 +74,15 @@ function cleanHtml(rawHtml: string): string {
     )
     .replace(/&[a-z]{2,6};/gi, " ")
 
-  // Normalize whitespace
   html = html.replace(/[ \t]+/g, " ")
   html = html.replace(/\n[ \t]+/g, "\n")
   html = html.replace(/[ \t]+\n/g, "\n")
   html = html.replace(/\n{3,}/g, "\n\n")
 
   return html.trim()
+}
+
+export async function fetchAndClean(url: string): Promise<string> {
+  const raw = await fetchRaw(url)
+  return cleanHtml(raw)
 }

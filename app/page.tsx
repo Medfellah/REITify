@@ -3,7 +3,9 @@
 import { useState } from "react"
 import { UrlInput } from "@/components/UrlInput"
 import { ResultCard } from "@/components/ResultCard"
-import type { ExtractionId, ExtractionResult, SSEPayload } from "@/types"
+import { CompanyCard } from "@/components/CompanyCard"
+import { RunStatsBar } from "@/components/RunStatsBar"
+import type { ExtractionId, ExtractionResult, FilingMeta, RunStats, SSEPayload } from "@/types"
 
 const EXTRACTION_ORDER: ExtractionId[] = [
   "tenant_concentration",
@@ -36,12 +38,30 @@ const makeLoadingCards = (): Record<ExtractionId, CardState> =>
     EXTRACTION_ORDER.map((id) => [id, { status: "loading" as CardStatus, result: null }])
   ) as Record<ExtractionId, CardState>
 
+function IconClipboard() {
+  return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2" />
+    </svg>
+  )
+}
+
+function IconDownload() {
+  return (
+    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-1m-4-4-4 4m0 0-4-4m4 4V4" />
+    </svg>
+  )
+}
+
 export default function Home() {
   const [url, setUrl] = useState("")
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [cards, setCards] = useState<Record<ExtractionId, CardState>>(makeIdleCards())
   const [fatalError, setFatalError] = useState<string | null>(null)
   const [isDone, setIsDone] = useState(false)
+  const [filingMeta, setFilingMeta] = useState<FilingMeta | null>(null)
+  const [runStats, setRunStats] = useState<RunStats | null>(null)
 
   const hasResults =
     isDone || EXTRACTION_ORDER.some((id) => cards[id].status === "done")
@@ -50,6 +70,8 @@ export default function Home() {
     setIsAnalyzing(true)
     setFatalError(null)
     setIsDone(false)
+    setFilingMeta(null)
+    setRunStats(null)
     setCards(makeLoadingCards())
 
     try {
@@ -84,7 +106,9 @@ export default function Home() {
             continue
           }
 
-          if (payload.type === "extraction_result") {
+          if (payload.type === "filing_meta") {
+            setFilingMeta(payload.meta)
+          } else if (payload.type === "extraction_result") {
             setCards((prev) => ({
               ...prev,
               [payload.id]: { status: "done", result: payload.result },
@@ -95,6 +119,7 @@ export default function Home() {
             break
           } else if (payload.type === "done") {
             setIsDone(true)
+            setRunStats(payload.stats)
           }
         }
       }
@@ -206,7 +231,7 @@ export default function Home() {
     <div className="min-h-screen bg-slate-50">
       {/* Header */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-2xl mx-auto px-4 py-4 flex items-baseline gap-3">
+        <div className="max-w-5xl mx-auto px-6 py-4 flex items-baseline gap-3">
           <span className="text-lg font-bold tracking-tight text-slate-900">
             REITify
           </span>
@@ -214,7 +239,7 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="max-w-2xl mx-auto px-4 py-12 space-y-6">
+      <main className="max-w-5xl mx-auto px-6 py-12 space-y-6">
         {/* Hero */}
         <div className="text-center space-y-2 pb-2">
           <h1 className="text-2xl font-bold text-slate-900">
@@ -243,12 +268,19 @@ export default function Home() {
           </div>
         )}
 
-        {/* Result Cards */}
+        {/* Company Card — shown once filing metadata arrives */}
+        {filingMeta && <CompanyCard meta={filingMeta} />}
+
+        {/* Run Stats Bar — shown once extraction is complete */}
+        {runStats && <RunStatsBar stats={runStats} />}
+
+        {/* Result Cards — 2x2 grid */}
         {(isAnalyzing || hasResults) && (
-          <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
             {EXTRACTION_ORDER.map((id) => (
               <ResultCard
                 key={id}
+                id={id}
                 title={EXTRACTION_TITLES[id]}
                 status={cards[id].status}
                 result={cards[id].result}
@@ -262,22 +294,24 @@ export default function Home() {
           <div className="flex gap-3 pt-2 pb-8">
             <button
               onClick={handleCopy}
-              className="flex-1 py-3 border border-slate-300 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-100 transition-colors"
+              className="flex-1 flex items-center justify-center gap-2 py-3 border border-slate-300 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-100 transition-colors"
             >
+              <IconClipboard />
               Copy Summary
             </button>
             <button
               onClick={handleExportPDF}
-              className="flex-1 py-3 border border-slate-300 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-100 transition-colors"
+              className="flex-1 flex items-center justify-center gap-2 py-3 border border-slate-300 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-100 transition-colors"
             >
+              <IconDownload />
               Export PDF
             </button>
           </div>
         )}
       </main>
 
-      <footer className="max-w-2xl mx-auto px-4 py-6 text-center">
-        <p className="text-xs text-slate-400">By Mohamed for Starwood · v1.0.0</p>
+      <footer className="max-w-5xl mx-auto px-6 py-6 text-center">
+        <p className="text-xs text-slate-400">By Mohamed for Starwood · v1.1.0</p>
       </footer>
     </div>
   )
