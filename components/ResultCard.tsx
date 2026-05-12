@@ -320,7 +320,7 @@ function GeoCard({ result }: { result: ExtractionResult }) {
       </div>
 
       {rows.length > 0 ? (
-        <div className="flex-1 overflow-x-auto">
+        <div className="overflow-x-auto">
           <table className="w-full text-[12px]">
             <thead>
               <tr className="border-b border-slate-100">
@@ -424,28 +424,12 @@ function GeoCard({ result }: { result: ExtractionResult }) {
       )}
 
       {rows.length > 0 && (
-        <div className="flex items-center justify-center gap-6 mt-4 pt-3 border-t border-slate-100">
+        <div className="flex justify-center mt-3 pt-3 border-t border-slate-100">
           <DonutChart rows={rows} />
-          <div className="space-y-1.5">
-            {rows.map((row) => {
-              const val = row.omGBVM ?? row.gbvM
-              const total = rows.reduce((s, r) => s + (r.omGBVM ?? r.gbvM), 0)
-              const pct = total > 0 ? ((val / total) * 100).toFixed(1) : "—"
-              return (
-                <div key={row.region} className="flex items-center gap-2 text-[11px]">
-                  <span
-                    className="inline-block w-2.5 h-2.5 rounded-sm flex-shrink-0"
-                    style={{ backgroundColor: GEO_COLORS[row.region] ?? "#94a3b8" }}
-                  />
-                  <span className="text-slate-700">{row.region}</span>
-                  <span className="font-medium text-slate-800 tabular-nums ml-auto pl-3">{pct}%</span>
-                </div>
-              )
-            })}
-          </div>
         </div>
       )}
 
+      <div className="flex-1" />
       <SourceBlock section={result.section} tableRef={result.tableRef} />
     </div>
   )
