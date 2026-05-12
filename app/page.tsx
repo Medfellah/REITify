@@ -38,11 +38,146 @@ const makeLoadingCards = (): Record<ExtractionId, CardState> =>
     EXTRACTION_ORDER.map((id) => [id, { status: "loading" as CardStatus, result: null }])
   ) as Record<ExtractionId, CardState>
 
-function IconClipboard() {
+// ── Text export helpers ────────────────────────────────────────────────────
+
+function fmtGBVText(n: number): string {
+  return n >= 1000 ? `$${(n / 1000).toFixed(1)}B` : `$${n.toLocaleString()}M`
+}
+
+function buildTextBody(cards: Record<ExtractionId, CardState>): string {
+  const lines: string[] = []
+  const sep = () => { lines.push(""); lines.push("---"); lines.push("") }
+  const tDate = (ref: string | null) => (ref ? ref.replace(/^[^,]+,\s*/, "") : "")
+
+  // Tenant Concentration
+  const tenant = cards.tenant_concentration.result
+  lines.push("TENANT CONCENTRATION")
+  if (tenant && !tenant.error) {
+    const d = tDate(tenant.tableRef ?? null)
+    lines.push(`Source: ${tenant.section ?? ""}${d ? `, ${d}` : ""}`)
+    lines.push("")
+    const top10sqft = tenant.tenantRows?.slice(0, 10).reduce((s, r) => s + (r.sqftM ?? 0), 0) ?? 0
+    const top25sqft = tenant.tenantRows?.reduce((s, r) => s + (r.sqftM ?? 0), 0) ?? 0
+    if (tenant.tenantTop10Pct != null)
+      lines.push(`Top 10 customers: ${tenant.tenantTop10Pct}% of NER${top10sqft ? ` (${top10sqft}M sq ft)` : ""}`)
+    if (tenant.tenantTop25Pct != null)
+      lines.push(`Top 25 customers: ${tenant.tenantTop25Pct}% of NER${top25sqft ? ` (${top25sqft}M sq ft)` : ""}`)
+    if ((tenant.tenantRows ?? []).length > 0) {
+      lines.push("")
+      for (const row of tenant.tenantRows ?? []) {
+        const sqft = row.sqftM != null ? ` — ${row.sqftM}M sq ft` : ""
+        lines.push(`${row.rank}. ${row.name}${sqft} — ${row.pct}%`)
+      }
+    }
+  } else {
+    lines.push("Could not locate this data in the filing.")
+  }
+
+  sep()
+
+  // Geographic Exposure
+  const geo = cards.geographic_exposure.result
+  lines.push("GEOGRAPHIC EXPOSURE")
+  if (geo && !geo.error) {
+    const d = tDate(geo.tableRef ?? null)
+    lines.push(`Source: ${geo.section ?? ""}${d ? `, ${d}` : ""}`)
+    lines.push("")
+    for (const row of geo.geoRows ?? []) {
+      const om = row.omGBVM != null ? ` / ${fmtGBVText(row.omGBVM)} O&M` : ""
+      const pct = row.omPct != null ? ` (${row.omPct}% of portfolio)` : ""
+      lines.push(`${row.region}: ${fmtGBVText(row.gbvM)} consolidated GBV${om}${pct}`)
+      for (const child of row.children ?? []) {
+        const sqft = child.sqftM != null ? ` — ${child.sqftM}M sq ft` : ""
+        lines.push(`  ${child.market}: ${fmtGBVText(child.gbvM)}${sqft}`)
+      }
+    }
+    if (geo.californiaGBVM != null || geo.californiaNOIPct != null) {
+      const parts: string[] = []
+      if (geo.californiaGBVM != null) parts.push(fmtGBVText(geo.californiaGBVM))
+      if (geo.californiaNOIPct != null) parts.push(`${geo.californiaNOIPct}% of consolidated NOI`)
+      lines.push("")
+      lines.push(`California: ${parts.join(" / ")}`)
+    }
+  } else {
+    lines.push("Could not locate this data in the filing.")
+  }
+
+  sep()
+
+  // Debt Maturity Schedule
+  const debt = cards.debt_maturity.result
+  lines.push("DEBT MATURITY SCHEDULE")
+  if (debt && !debt.error) {
+    const d = tDate(debt.tableRef ?? null)
+    lines.push(`Source: ${debt.section ?? ""}${d ? `, ${d}` : ""}`)
+    if (debt.unit) lines.push(`Figures ${debt.unit}`)
+    lines.push("")
+    for (const row of debt.debtRows ?? []) {
+      const label = row.year === "2025" ? `${row.year} (near term)` : row.year
+      const breakdown =
+        row.seniorK != null || row.termLoanK != null
+          ? ` (Senior: $${row.seniorK?.toLocaleString() ?? "—"} / Term Loans: ${row.termLoanK != null ? `$${row.termLoanK.toLocaleString()}` : "—"})`
+          : ""
+      lines.push(`${label}: $${row.amountK.toLocaleString()}${breakdown}`)
+    }
+    if (debt.footnote) { lines.push(""); lines.push(`Note: ${debt.footnote}`) }
+  } else {
+    lines.push("Could not locate this data in the filing.")
+  }
+
+  sep()
+
+  // Lease Expirations
+  const lease = cards.lease_expirations.result
+  lines.push("MATERIAL LEASE EXPIRATIONS (NEXT 24 MONTHS)")
+  if (lease && !lease.error) {
+    const d = tDate(lease.tableRef ?? null)
+    lines.push(`Source: ${lease.section ?? ""}${d ? `, ${d}` : ""}`)
+    lines.push("")
+    if (lease.lease24mSqftM != null || lease.lease24mNerM != null) {
+      const parts: string[] = []
+      if (lease.lease24mSqftM != null) parts.push(`${lease.lease24mSqftM}M sq ft`)
+      if (lease.lease24mNerM != null) parts.push(`$${lease.lease24mNerM}M NER`)
+      if (lease.lease24mPct != null) parts.push(`${lease.lease24mPct}% of portfolio`)
+      lines.push(`24-month total: ${parts.join(" / ")}`)
+    }
+    for (const row of lease.leaseRows ?? []) {
+      const psf = row.psf != null ? ` / $${row.psf.toFixed(2)} per sq ft` : ""
+      lines.push(`${row.year}: ${row.sqftM}M sq ft / $${row.nerM}M NER / ${row.pct}%${psf}`)
+    }
+    if (lease.footnote) { lines.push(""); lines.push(`Note: ${lease.footnote}`) }
+  } else {
+    lines.push("Could not locate this data in the filing.")
+  }
+
+  return lines.join("\n")
+}
+
+// ── Segmented control ──────────────────────────────────────────────────────
+
+function SegmentedControl({
+  value,
+  onChange,
+}: {
+  value: "visual" | "text"
+  onChange: (v: "visual" | "text") => void
+}) {
   return (
-    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2" />
-    </svg>
+    <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+      {(["visual", "text"] as const).map((opt) => (
+        <button
+          key={opt}
+          onClick={() => onChange(opt)}
+          className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+            value === opt
+              ? "bg-white text-slate-900 shadow-sm border border-slate-200"
+              : "text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          {opt === "visual" ? "Visual" : "Text"}
+        </button>
+      ))}
+    </div>
   )
 }
 
@@ -62,6 +197,7 @@ export default function Home() {
   const [isDone, setIsDone] = useState(false)
   const [filingMeta, setFilingMeta] = useState<FilingMeta | null>(null)
   const [runStats, setRunStats] = useState<RunStats | null>(null)
+  const [viewMode, setViewMode] = useState<"visual" | "text">("visual")
 
   const hasResults =
     isDone || EXTRACTION_ORDER.some((id) => cards[id].status === "done")
@@ -133,32 +269,28 @@ export default function Home() {
     }
   }
 
-  const handleCopy = () => {
+  const handleExportText = () => {
     const date = new Date().toLocaleDateString("en-US", {
       year: "numeric",
       month: "long",
       day: "numeric",
     })
-    const lines: string[] = [
+    const header = [
       "REITify — REIT 10-K Analysis",
       `Filing: ${url}`,
       `Date: ${date}`,
       "",
-    ]
-    for (const id of EXTRACTION_ORDER) {
-      const { result } = cards[id]
-      lines.push(EXTRACTION_TITLES[id].toUpperCase())
-      if (!result || result.error) {
-        lines.push("Could not locate this data in the filing. Verify manually.")
-      } else {
-        if (result.unit) lines.push(`(${result.unit})`)
-        if (result.data) lines.push(result.data)
-        if (result.footnote) lines.push(`ⓘ ${result.footnote}`)
-        if (result.citation) lines.push(`\nSource: "${result.citation}"`)
-      }
-      lines.push("", "---", "")
-    }
-    navigator.clipboard.writeText(lines.join("\n"))
+      "---",
+      "",
+    ].join("\n")
+    const content = header + buildTextBody(cards)
+    const blob = new Blob([content], { type: "text/plain" })
+    const dlUrl = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = dlUrl
+    a.download = "reitify-analysis.txt"
+    a.click()
+    URL.revokeObjectURL(dlUrl)
   }
 
   const handleExportPDF = async () => {
@@ -274,30 +406,45 @@ export default function Home() {
         {/* Run Stats Bar — shown once extraction is complete */}
         {runStats && <RunStatsBar stats={runStats} />}
 
-        {/* Result Cards — 2x2 grid */}
+        {/* View toggle — between stats bar and results */}
         {(isAnalyzing || hasResults) && (
-          <div className="grid grid-cols-2 gap-4">
-            {EXTRACTION_ORDER.map((id) => (
-              <ResultCard
-                key={id}
-                id={id}
-                title={EXTRACTION_TITLES[id]}
-                status={cards[id].status}
-                result={cards[id].result}
-              />
-            ))}
+          <div className="flex justify-end">
+            <SegmentedControl value={viewMode} onChange={setViewMode} />
           </div>
+        )}
+
+        {/* Results — Visual (2×2 grid) or Text */}
+        {(isAnalyzing || hasResults) && (
+          viewMode === "text" ? (
+            <div className="bg-white border border-slate-200 rounded-xl p-6">
+              <pre className="text-[13px] text-slate-700 font-mono whitespace-pre-wrap leading-relaxed">
+                {buildTextBody(cards)}
+              </pre>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-4">
+              {EXTRACTION_ORDER.map((id) => (
+                <ResultCard
+                  key={id}
+                  id={id}
+                  title={EXTRACTION_TITLES[id]}
+                  status={cards[id].status}
+                  result={cards[id].result}
+                />
+              ))}
+            </div>
+          )
         )}
 
         {/* Action Buttons — shown once at least one result is in */}
         {hasResults && (
           <div className="flex gap-3 pt-2 pb-8">
             <button
-              onClick={handleCopy}
+              onClick={handleExportText}
               className="flex-1 flex items-center justify-center gap-2 py-3 border border-slate-300 text-slate-700 text-sm font-semibold rounded-lg hover:bg-slate-100 transition-colors"
             >
-              <IconClipboard />
-              Copy Summary
+              <IconDownload />
+              Export as text
             </button>
             <button
               onClick={handleExportPDF}
