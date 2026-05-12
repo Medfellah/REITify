@@ -275,6 +275,10 @@ export default function Home() {
           </div>
         )}
       </main>
+
+      <footer className="max-w-2xl mx-auto px-4 py-6 text-center">
+        <p className="text-xs text-slate-400">By Mohamed for Starwood · v1.0.0</p>
+      </footer>
     </div>
   )
 }
