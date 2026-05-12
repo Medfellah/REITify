@@ -229,7 +229,7 @@ export async function runExtraction(
   try {
     const message = await client.messages.create({
       model: MODEL_ID,
-      max_tokens: 2048,
+      max_tokens: 4096,
       system: SYSTEM_PROMPT,
       messages: [{ role: "user", content: userPrompt }],
     })
