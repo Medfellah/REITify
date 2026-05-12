@@ -113,7 +113,7 @@ function buildTextBody(cards: Record<ExtractionId, CardState>): string {
     if (debt.unit) lines.push(`Figures ${debt.unit}`)
     lines.push("")
     for (const row of debt.debtRows ?? []) {
-      const label = row.year === "2025" ? `${row.year} (near term)` : row.year
+      const label = row.year
       const breakdown =
         row.seniorK != null || row.termLoanK != null
           ? ` (Senior: $${row.seniorK?.toLocaleString() ?? "—"} / Term Loans: ${row.termLoanK != null ? `$${row.termLoanK.toLocaleString()}` : "—"})`

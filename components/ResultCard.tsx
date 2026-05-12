@@ -199,7 +199,7 @@ function ChevronIcon({ open }: { open: boolean }) {
 
 function GeoCard({ result }: { result: ExtractionResult }) {
   const [openRegion, setOpenRegion] = useState<string | null>(null)
-  const rows = result.geoRows ?? []
+  const rows = [...(result.geoRows ?? [])].sort((a, b) => b.gbvM - a.gbvM)
 
   const toggle = (region: string) =>
     setOpenRegion((prev) => (prev === region ? null : region))
@@ -266,7 +266,7 @@ function GeoCard({ result }: { result: ExtractionResult }) {
                       <span className="text-right">O&amp;M GBV</span>
                       <span className="text-right">% of Region</span>
                     </div>
-                    {(row.children ?? []).map((child) => {
+                    {[...(row.children ?? [])].sort((a, b) => b.gbvM - a.gbvM).map((child) => {
                       const regionBase = row.omGBVM ?? row.gbvM
                       const pct = regionBase > 0
                         ? ((child.gbvM / regionBase) * 100).toFixed(1)
@@ -367,16 +367,7 @@ function DebtCard({ result }: { result: ExtractionResult }) {
             <tbody className="divide-y divide-slate-50">
               {dataRows.map((row) => (
                 <tr key={row.year}>
-                  <td className="py-1.5 text-slate-700">
-                    <span className="flex items-center gap-1.5">
-                      {row.year}
-                      {row.year === "2025" && (
-                        <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-100 text-red-600">
-                          near term
-                        </span>
-                      )}
-                    </span>
-                  </td>
+                  <td className="py-1.5 text-slate-700">{row.year}</td>
                   {hasSenior && (
                     <td className="py-1.5 text-right font-mono text-slate-600">
                       {fmtAmt(row.seniorK)}
