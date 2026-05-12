@@ -47,7 +47,8 @@ export function ResultCard({ title, status, result }: Props) {
         hasError ? "border-amber-200" : "border-slate-200"
       }`}
     >
-      <div className="flex items-start justify-between gap-4 mb-4">
+      {/* Header row: title + section reference */}
+      <div className="flex items-start justify-between gap-4 mb-3">
         <h3 className="text-xs font-semibold uppercase tracking-widest text-slate-700">
           {title}
         </h3>
@@ -58,6 +59,13 @@ export function ResultCard({ title, status, result }: Props) {
         )}
       </div>
 
+      {/* Unit pill — shown once, never repeated inline */}
+      {!hasError && result?.unit && (
+        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-500 mb-4">
+          {result.unit}
+        </span>
+      )}
+
       {hasError ? (
         <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
           <p className="text-sm text-amber-800">
@@ -66,9 +74,20 @@ export function ResultCard({ title, status, result }: Props) {
         </div>
       ) : (
         <>
+          {/* Extracted data */}
           <p className="text-sm text-slate-800 whitespace-pre-wrap leading-relaxed mb-4">
             {result?.data}
           </p>
+
+          {/* Footnote — important caveats from the filing */}
+          {result?.footnote && (
+            <div className="flex gap-2 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 mb-4">
+              <span className="text-blue-400 flex-shrink-0 text-xs mt-0.5">ⓘ</span>
+              <p className="text-xs text-blue-700 leading-relaxed">{result.footnote}</p>
+            </div>
+          )}
+
+          {/* Verbatim source citation */}
           {result?.citation && (
             <div className="border-l-4 border-slate-200 pl-4 bg-slate-50 rounded-r-lg py-3 pr-3">
               <p className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-2">

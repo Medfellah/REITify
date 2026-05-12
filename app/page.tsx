@@ -126,7 +126,9 @@ export default function Home() {
       if (!result || result.error) {
         lines.push("Could not locate this data in the filing. Verify manually.")
       } else {
+        if (result.unit) lines.push(`(${result.unit})`)
         if (result.data) lines.push(result.data)
+        if (result.footnote) lines.push(`ⓘ ${result.footnote}`)
         if (result.citation) lines.push(`\nSource: "${result.citation}"`)
       }
       lines.push("", "---", "")
