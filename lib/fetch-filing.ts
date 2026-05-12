@@ -25,8 +25,10 @@ export async function fetchAndClean(url: string): Promise<string> {
     response = await fetch(url, {
       signal: controller.signal,
       headers: {
-        "User-Agent": "REITify/1.0 (financial-analysis-tool)",
-        Accept: "text/html,application/xhtml+xml",
+        // SEC EDGAR requires a User-Agent with a contact email per their access policy
+        "User-Agent": "REITify/1.0 mfellah@mba2027.hbs.edu",
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
       },
     })
   } finally {
