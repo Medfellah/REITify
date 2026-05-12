@@ -313,11 +313,10 @@ export default function Home() {
         {/* Hero */}
         <div className="text-center space-y-2 pb-2">
           <h1 className="text-2xl font-bold text-slate-900">
-            Analyze any REIT 10-K in under 5 minutes.
+            REIT 10-K Intelligence, Instantly.
           </h1>
           <p className="text-sm text-slate-500">
-            Paste a SEC EDGAR filing URL. Get 4 key data points, each with a
-            verbatim source citation you can verify in under 10 seconds.
+            Paste a SEC EDGAR filing URL to extract tenant concentration, geographic exposure, debt maturities and lease expirations — each with a verified source citation.
           </p>
         </div>
 

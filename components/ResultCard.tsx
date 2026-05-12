@@ -243,36 +243,69 @@ const GEO_COLORS: Record<string, string> = {
 }
 
 function DonutChart({ rows }: { rows: import("@/types").GeoRow[] }) {
-  const r = 38
-  const cx = 52
-  const cy = 52
-  const strokeW = 20
+  const r = 58
+  const cx = 80
+  const cy = 80
+  const strokeW = 30
   const C = 2 * Math.PI * r
   const total = rows.reduce((s, row) => s + (row.omGBVM ?? row.gbvM), 0)
   if (total === 0) return null
 
-  let cumLen = 0
+  let cumArcLen = 0
+  let cumAngle = -Math.PI / 2  // start at 12 o'clock
+
+  const segments = rows.map((row) => {
+    const val = row.omGBVM ?? row.gbvM
+    const pct = val / total
+    const segLen = pct * C
+    const angle = pct * 2 * Math.PI
+    const midAngle = cumAngle + angle / 2
+    const seg = {
+      row,
+      pct,
+      pctStr: (pct * 100).toFixed(1),
+      segLen,
+      dashOffset: -cumArcLen,
+      labelX: cx + r * Math.cos(midAngle),
+      labelY: cy + r * Math.sin(midAngle),
+    }
+    cumArcLen += segLen
+    cumAngle += angle
+    return seg
+  })
+
   return (
-    <svg width="104" height="104" viewBox="0 0 104 104" className="flex-shrink-0">
-      {rows.map((row) => {
-        const val = row.omGBVM ?? row.gbvM
-        const segLen = (val / total) * C
-        const dashOffset = -cumLen
-        cumLen += segLen
-        return (
-          <circle
-            key={row.region}
-            cx={cx} cy={cy} r={r}
-            fill="none"
-            stroke={GEO_COLORS[row.region] ?? "#94a3b8"}
-            strokeWidth={strokeW}
-            strokeDasharray={`${segLen} ${C - segLen}`}
-            strokeDashoffset={dashOffset}
-            style={{ transform: "rotate(-90deg)", transformOrigin: `${cx}px ${cy}px` }}
-          />
-        )
-      })}
-      <circle cx={cx} cy={cy} r={r - strokeW / 2 - 1} fill="white" />
+    <svg width="160" height="160" viewBox="0 0 160 160" className="flex-shrink-0">
+      {segments.map(({ row, segLen, dashOffset }) => (
+        <circle
+          key={row.region}
+          cx={cx} cy={cy} r={r}
+          fill="none"
+          stroke={GEO_COLORS[row.region] ?? "#94a3b8"}
+          strokeWidth={strokeW}
+          strokeDasharray={`${segLen} ${C - segLen}`}
+          strokeDashoffset={dashOffset}
+          style={{ transform: "rotate(-90deg)", transformOrigin: `${cx}px ${cy}px` }}
+        />
+      ))}
+      <circle cx={cx} cy={cy} r={r - strokeW / 2 - 2} fill="white" />
+      <text x={cx} y={cy} textAnchor="middle" dominantBaseline="middle" fill="#94a3b8" fontSize="11" fontWeight="600" letterSpacing="0.05em">GBV</text>
+      {segments.map(({ row, pct, pctStr, labelX, labelY }) =>
+        pct >= 0.07 ? (
+          <text
+            key={`lbl-${row.region}`}
+            x={labelX}
+            y={labelY}
+            textAnchor="middle"
+            dominantBaseline="middle"
+            fill="white"
+            fontSize="10"
+            fontWeight="700"
+          >
+            {pctStr}%
+          </text>
+        ) : null
+      )}
     </svg>
   )
 }
