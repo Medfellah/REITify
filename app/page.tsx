@@ -293,70 +293,8 @@ export default function Home() {
     URL.revokeObjectURL(dlUrl)
   }
 
-  const handleExportPDF = async () => {
-    const { jsPDF } = await import("jspdf")
-    const doc = new jsPDF({ unit: "pt", format: "letter" })
-
-    const margin = 56
-    const pageW = doc.internal.pageSize.getWidth()
-    const maxW = pageW - margin * 2
-    let y = margin
-
-    const checkPage = (needed: number) => {
-      if (y + needed > doc.internal.pageSize.getHeight() - margin) {
-        doc.addPage()
-        y = margin
-      }
-    }
-
-    const addLine = (
-      text: string,
-      size: number,
-      color: [number, number, number],
-      bold = false
-    ) => {
-      doc.setFontSize(size)
-      doc.setTextColor(...color)
-      doc.setFont("helvetica", bold ? "bold" : "normal")
-      const lines = doc.splitTextToSize(text, maxW) as string[]
-      checkPage(lines.length * size * 1.4)
-      doc.text(lines, margin, y)
-      y += lines.length * size * 1.4 + 4
-    }
-
-    addLine("REITify — REIT 10-K Analysis", 16, [15, 23, 42], true)
-    addLine(url, 8, [100, 116, 139])
-    addLine(
-      new Date().toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      }),
-      8,
-      [100, 116, 139]
-    )
-    y += 14
-
-    for (const id of EXTRACTION_ORDER) {
-      const { result } = cards[id]
-      addLine(EXTRACTION_TITLES[id], 10, [15, 23, 42], true)
-      if (!result || result.error) {
-        addLine(
-          "Could not locate this data in the filing. Verify manually.",
-          9,
-          [180, 83, 9]
-        )
-      } else {
-        if (result.data) addLine(result.data, 9, [30, 41, 59])
-        if (result.citation) {
-          y += 4
-          addLine(`Source: "${result.citation}"`, 8, [100, 116, 139])
-        }
-      }
-      y += 16
-    }
-
-    doc.save("reitify-analysis.pdf")
+  const handleExportPDF = () => {
+    window.print()
   }
 
   return (
@@ -458,7 +396,7 @@ export default function Home() {
       </main>
 
       <footer className="max-w-5xl mx-auto px-6 py-6 text-center">
-        <p className="text-xs text-slate-400">By Mohamed for Starwood · v1.1.0</p>
+        <p className="text-xs text-slate-400">By Mohamed for Starwood · v1.2.0</p>
       </footer>
     </div>
   )

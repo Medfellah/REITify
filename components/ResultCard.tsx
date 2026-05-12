@@ -267,92 +267,96 @@ function GeoCard({ result }: { result: ExtractionResult }) {
       </div>
 
       {rows.length > 0 ? (
-        <div className="flex-1 divide-y divide-slate-50">
-          {/* L1 header */}
-          <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-3 pb-1.5 text-[10px] uppercase tracking-wider text-slate-400 font-medium">
-            <span>Region</span>
-            <span className="text-right">Sq Ft</span>
-            <span className="text-right">Consol. GBV</span>
-            <span className="text-right">O&amp;M GBV</span>
-            <span className="text-right">% O&amp;M</span>
-          </div>
+        <div className="flex-1 overflow-x-auto">
+          <table className="w-full text-[12px]">
+            <thead>
+              <tr className="border-b border-slate-100">
+                <th className="text-left text-[10px] uppercase tracking-wider text-slate-400 pb-1.5 font-medium">Region</th>
+                <th className="text-right text-[10px] uppercase tracking-wider text-slate-400 pb-1.5 font-medium pl-3">Sq Ft</th>
+                <th className="text-right text-[10px] uppercase tracking-wider text-slate-400 pb-1.5 font-medium pl-3">Consol. GBV</th>
+                <th className="text-right text-[10px] uppercase tracking-wider text-slate-400 pb-1.5 font-medium pl-3">O&amp;M GBV</th>
+                <th className="text-right text-[10px] uppercase tracking-wider text-slate-400 pb-1.5 font-medium pl-3">% O&amp;M</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.flatMap((row) => {
+                const isOpen = openRegion === row.region
+                const hasChildren = (row.children ?? []).length > 0
+                const sortedChildren = [...(row.children ?? [])].sort((a, b) => b.gbvM - a.gbvM)
+                const hasConsol = sortedChildren.some((c) => c.consolidatedGBVM != null)
+                const regionTotal = OM_REGIONAL_TOTAL[row.region] ?? (row.omGBVM ?? row.gbvM)
 
-          {rows.map((row) => {
-            const isOpen = openRegion === row.region
-            const hasChildren = (row.children ?? []).length > 0
-            return (
-              <div key={row.region}>
-                {/* L1 row */}
-                <button
-                  onClick={() => hasChildren && toggle(row.region)}
-                  className={`w-full grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-3 py-2 text-[12px] text-left ${hasChildren ? "cursor-pointer hover:bg-slate-50" : "cursor-default"}`}
-                >
-                  <span className="flex items-center gap-1 font-medium text-slate-800">
-                    {row.region}
-                    {hasChildren && <ChevronIcon open={isOpen} />}
-                  </span>
-                  <span className="text-right text-slate-600">
-                    {row.sqftM != null ? `${row.sqftM}M` : "—"}
-                  </span>
-                  <span className="text-right text-slate-600">
-                    {fmtGBV(row.gbvM)}
-                  </span>
-                  <span className="text-right text-slate-600">
-                    {row.omGBVM != null ? fmtGBV(row.omGBVM) : "—"}
-                  </span>
-                  <span className="text-right font-semibold text-slate-800">
-                    {row.omPct != null ? `${row.omPct}%` : "—"}
-                  </span>
-                </button>
+                const l1 = (
+                  <tr
+                    key={row.region}
+                    onClick={() => hasChildren && toggle(row.region)}
+                    className={`border-t border-slate-50 ${hasChildren ? "cursor-pointer hover:bg-slate-50" : ""}`}
+                  >
+                    <td className="py-2 font-medium text-slate-800">
+                      <span className="flex items-center gap-1">
+                        {row.region}
+                        {hasChildren && <ChevronIcon open={isOpen} />}
+                      </span>
+                    </td>
+                    <td className="py-2 text-right text-slate-600 pl-3">
+                      {row.sqftM != null ? `${row.sqftM}M` : "—"}
+                    </td>
+                    <td className="py-2 text-right text-slate-600 pl-3">{fmtGBV(row.gbvM)}</td>
+                    <td className="py-2 text-right text-slate-600 pl-3">
+                      {row.omGBVM != null ? fmtGBV(row.omGBVM) : "—"}
+                    </td>
+                    <td className="py-2 text-right font-semibold text-slate-800 pl-3">
+                      {row.omPct != null ? `${row.omPct}%` : "—"}
+                    </td>
+                  </tr>
+                )
 
-                {/* L2 rows */}
-                {isOpen && (row.children ?? []).length > 0 && (() => {
-                  const sortedChildren = [...(row.children ?? [])].sort((a, b) => b.gbvM - a.gbvM)
-                  const hasConsol = sortedChildren.some((c) => c.consolidatedGBVM != null)
-                  const regionTotal = OM_REGIONAL_TOTAL[row.region] ?? (row.omGBVM ?? row.gbvM)
-                  const cols = hasConsol ? "[1fr_auto_auto_auto_auto]" : "[1fr_auto_auto_auto]"
-                  return (
-                    <div className="bg-slate-50 rounded-lg mb-1 divide-y divide-slate-100">
-                      <div className={`grid grid-cols-${cols} gap-x-3 px-3 py-1 text-[10px] uppercase tracking-wider text-slate-400 font-medium`}>
-                        <span>Market</span>
-                        <span className="text-right">Sq Ft</span>
-                        {hasConsol && <span className="text-right">Consol. GBV</span>}
-                        <span className="text-right">O&amp;M GBV</span>
-                        <span className="text-right">% of Region</span>
-                      </div>
-                      {sortedChildren.map((child) => {
-                        const pct = regionTotal > 0
-                          ? ((child.gbvM / regionTotal) * 100).toFixed(1)
-                          : "—"
-                        return (
-                          <div
-                            key={child.market}
-                            className={`grid grid-cols-${cols} gap-x-3 px-3 py-1.5 text-[11px]`}
-                          >
-                            <span className="text-slate-700">{child.market}</span>
-                            <span className="text-right text-slate-500">
-                              {child.sqftM != null ? `${child.sqftM}M` : "—"}
-                            </span>
-                            {hasConsol && (
-                              <span className="text-right text-slate-500">
-                                {child.consolidatedGBVM != null ? fmtGBV(child.consolidatedGBVM) : "—"}
-                              </span>
-                            )}
-                            <span className="text-right text-slate-500">
-                              {fmtGBV(child.gbvM)}
-                            </span>
-                            <span className="text-right text-slate-600 font-medium">
-                              {pct}%
-                            </span>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )
-                })()}
-              </div>
-            )
-          })}
+                if (!isOpen || sortedChildren.length === 0) return [l1]
+
+                const l2 = (
+                  <tr key={`${row.region}-l2`}>
+                    <td colSpan={5} className="pb-2">
+                      <table className="w-full text-[11px] bg-slate-50 rounded-lg">
+                        <thead>
+                          <tr className="border-b border-slate-200">
+                            <th className="text-left text-[10px] uppercase tracking-wider text-slate-400 px-3 py-1 font-medium">Market</th>
+                            <th className="text-right text-[10px] uppercase tracking-wider text-slate-400 px-3 py-1 font-medium">Sq Ft</th>
+                            {hasConsol && <th className="text-right text-[10px] uppercase tracking-wider text-slate-400 px-3 py-1 font-medium">Consol. GBV</th>}
+                            <th className="text-right text-[10px] uppercase tracking-wider text-slate-400 px-3 py-1 font-medium">O&amp;M GBV</th>
+                            <th className="text-right text-[10px] uppercase tracking-wider text-slate-400 px-3 py-1 font-medium">% of Region</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {sortedChildren.map((child) => {
+                            const pct = regionTotal > 0
+                              ? ((child.gbvM / regionTotal) * 100).toFixed(1)
+                              : "—"
+                            return (
+                              <tr key={child.market}>
+                                <td className="px-3 py-1.5 text-slate-700">{child.market}</td>
+                                <td className="px-3 py-1.5 text-right text-slate-500">
+                                  {child.sqftM != null ? `${child.sqftM}M` : "—"}
+                                </td>
+                                {hasConsol && (
+                                  <td className="px-3 py-1.5 text-right text-slate-500">
+                                    {child.consolidatedGBVM != null ? fmtGBV(child.consolidatedGBVM) : "—"}
+                                  </td>
+                                )}
+                                <td className="px-3 py-1.5 text-right text-slate-500">{fmtGBV(child.gbvM)}</td>
+                                <td className="px-3 py-1.5 text-right text-slate-600 font-medium">{pct}%</td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </td>
+                  </tr>
+                )
+
+                return [l1, l2]
+              })}
+            </tbody>
+          </table>
         </div>
       ) : (
         result.data && (
