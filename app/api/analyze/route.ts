@@ -1,5 +1,5 @@
 import { validateFilingUrl, fetchAndClean } from "@/lib/fetch-filing"
-import { parseSections, selectChunk } from "@/lib/chunk-sections"
+import { extractByAnchor } from "@/lib/anchor-nav"
 import { EXTRACTION_CONFIGS, runExtraction } from "@/lib/extract"
 import type { SSEPayload } from "@/types"
 
@@ -38,11 +38,9 @@ export async function POST(req: Request) {
           return
         }
 
-        const sections = parseSections(cleanText)
-
         for (const config of EXTRACTION_CONFIGS) {
           send({ type: "extraction_start", id: config.id })
-          const chunk = selectChunk(sections, config.sectionKeys)
+          const chunk = extractByAnchor(cleanText, config.anchorSpec)
           const result = await runExtraction(config, chunk)
           send({ type: "extraction_result", id: config.id, result })
         }

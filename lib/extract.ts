@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk"
 import type { ExtractionId, ExtractionResult } from "@/types"
+import type { AnchorSpec } from "@/lib/anchor-nav"
 
 const client = new Anthropic()
 
@@ -17,7 +18,7 @@ export interface LLMResponse {
 export interface ExtractionConfig {
   id: ExtractionId
   title: string
-  sectionKeys: string[]
+  anchorSpec: AnchorSpec
   prompt: string
 }
 
@@ -25,17 +26,10 @@ export const EXTRACTION_CONFIGS: ExtractionConfig[] = [
   {
     id: "tenant_concentration",
     title: "Tenant Concentration",
-    sectionKeys: [
-      // Exact phrases (100× bonus) — these appear only in the right subsection
-      "top 25 customers",
-      "top 10 customers",
-      "net effective rent",
-      // Single-word fallbacks
-      "ner",
-      "customer",
-      "item 1",
-      "business",
-    ],
+    anchorSpec: {
+      startText: "Customers\n\n",
+      stopText: "Our People\n\n",
+    },
     prompt: `Extract the top tenant concentration data from this REIT 10-K filing section.
 
 Find: The table of top tenants ranked by percentage of annualized base rent (ABR), net effective rent (NER), or total revenues. Prologis and some other REITs use NER rather than ABR.
@@ -64,17 +58,10 @@ FILING TEXT:
   {
     id: "geographic_exposure",
     title: "Geographic Exposure",
-    sectionKeys: [
-      // Exact phrases targeting the specific table header
-      "geographic distribution",
-      "gross book value",
-      "consolidated operating properties",
-      "rentable square footage",
-      // Single-word fallbacks
-      "geographic",
-      "item 2",
-      "properties",
-    ],
+    anchorSpec: {
+      startText: "GEOGRAPHIC DISTRIBUTION\n\n",
+      stopText: "LEASE EXPIRATIONS\n\n",
+    },
     prompt: `Extract the geographic exposure breakdown from this REIT 10-K filing section.
 
 Find: The table showing portfolio breakdown by geographic region, market, or state. This is typically labelled "Geographic Distribution" and shows Rentable Square Footage and Gross Book Value by region.
@@ -103,18 +90,10 @@ FILING TEXT:
   {
     id: "debt_maturity",
     title: "Debt Maturity Schedule",
-    sectionKeys: [
-      // Exact phrases targeting the debt table description
-      "repayment of debt",
-      "scheduled principal payments",
-      "future repayment",
-      // Single-word fallbacks
-      "maturity",
-      "maturities",
-      "debt",
-      "principal",
-      "item 7a",
-    ],
+    anchorSpec: {
+      startText: "Long-Term Debt Maturities\n\n",
+      stopText: "Interest Expense\n\n",
+    },
     prompt: `Extract the debt maturity schedule from this REIT 10-K filing section.
 
 Find: The table of scheduled debt principal payments due by year. This is typically described as "future repayment of debt and scheduled principal payments" and appears in Item 7A or the notes to financial statements.
@@ -143,17 +122,10 @@ FILING TEXT:
   {
     id: "lease_expirations",
     title: "Material Lease Expirations (Next 24 Months)",
-    sectionKeys: [
-      // Exact phrases targeting the specific subsection
-      "lease expiration",
-      "leases in place",
-      "ner expiring",
-      // Single-word fallbacks
-      "expiration",
-      "expiring",
-      "item 2",
-      "properties",
-    ],
+    anchorSpec: {
+      startText: "LEASE EXPIRATIONS\n\n",
+      stopText: "CO-INVESTMENT VENTURES\n\n",
+    },
     prompt: `Extract the lease expiration schedule for the next 24 months from this REIT 10-K filing section.
 
 Find: The table of lease expirations, typically labelled "Lease Expirations" and described as summarizing "leases in place" at year-end. Focus on the nearest 2 years (current year + 1) but include the full table in the citation.

@@ -1,12 +1,25 @@
-import { describe, it, expect, vi } from "vitest"
-
-// Must mock Anthropic before importing lib/extract (client instantiated at module level)
-vi.mock("@anthropic-ai/sdk", () => ({
-  default: vi.fn(() => ({ messages: { create: vi.fn() } })),
-}))
-
+import { describe, it, expect } from "vitest"
 import { parseSections, selectChunk } from "../lib/chunk-sections"
-import { EXTRACTION_CONFIGS } from "../lib/extract"
+
+// Hardcoded key arrays — these match what was in EXTRACTION_CONFIGS before the
+// anchor-nav refactor replaced sectionKeys. Kept here so selectChunk tests
+// remain valid without depending on the config shape.
+const TENANT_KEYS = [
+  "top 25 customers", "top 10 customers", "net effective rent",
+  "ner", "customer", "item 1", "business",
+]
+const GEO_KEYS = [
+  "geographic distribution", "gross book value", "consolidated operating properties",
+  "rentable square footage", "geographic", "item 2", "properties",
+]
+const DEBT_KEYS = [
+  "repayment of debt", "scheduled principal payments", "future repayment",
+  "maturity", "maturities", "debt", "principal", "item 7a",
+]
+const LEASE_KEYS = [
+  "lease expiration", "leases in place", "ner expiring",
+  "expiration", "expiring", "item 2", "properties",
+]
 
 // ---------------------------------------------------------------------------
 // Representative sample filing text.
@@ -170,11 +183,9 @@ describe("parseSections", () => {
 // ---------------------------------------------------------------------------
 
 describe("selectChunk — tenant concentration", () => {
-  const cfg = EXTRACTION_CONFIGS.find((c) => c.id === "tenant_concentration")!
-
   it("finds the customer table in a normal-sized filing", () => {
     const sections = parseSections(SAMPLE_FILING)
-    const chunk = selectChunk(sections, cfg.sectionKeys)
+    const chunk = selectChunk(sections, TENANT_KEYS)
     expect(chunk.toLowerCase()).toContain("top 25 customers")
     expect(chunk).toContain("Amazon")
     expect(chunk).toContain("6.0%")
@@ -182,7 +193,7 @@ describe("selectChunk — tenant concentration", () => {
 
   it("still finds the customer table when Item 1 is padded past trimToRelevant threshold", () => {
     const sections = parseSections(LARGE_ITEM1_FILING)
-    const chunk = selectChunk(sections, cfg.sectionKeys)
+    const chunk = selectChunk(sections, TENANT_KEYS)
     // The phrase 'top 25 customers' must win over windows full of noise 'customers'
     expect(chunk.toLowerCase()).toContain("top 25 customers")
     expect(chunk).toContain("6.0%")
@@ -194,11 +205,9 @@ describe("selectChunk — tenant concentration", () => {
 // ---------------------------------------------------------------------------
 
 describe("selectChunk — geographic exposure", () => {
-  const cfg = EXTRACTION_CONFIGS.find((c) => c.id === "geographic_exposure")!
-
   it("finds the geographic distribution table", () => {
     const sections = parseSections(SAMPLE_FILING)
-    const chunk = selectChunk(sections, cfg.sectionKeys)
+    const chunk = selectChunk(sections, GEO_KEYS)
     expect(chunk.toLowerCase()).toContain("geographic distribution")
     expect(chunk).toContain("Gross Book Value")
     expect(chunk).toContain("75,770")
@@ -211,11 +220,9 @@ describe("selectChunk — geographic exposure", () => {
 // ---------------------------------------------------------------------------
 
 describe("selectChunk — debt maturity", () => {
-  const cfg = EXTRACTION_CONFIGS.find((c) => c.id === "debt_maturity")!
-
   it("finds the debt repayment table", () => {
     const sections = parseSections(SAMPLE_FILING)
-    const chunk = selectChunk(sections, cfg.sectionKeys)
+    const chunk = selectChunk(sections, DEBT_KEYS)
     expect(chunk.toLowerCase()).toContain("repayment of debt")
     expect(chunk).toContain("514,223")
     expect(chunk).toContain("31,449,909")
@@ -227,11 +234,10 @@ describe("selectChunk — debt maturity", () => {
 // ---------------------------------------------------------------------------
 
 describe("selectChunk — lease expirations", () => {
-  const cfg = EXTRACTION_CONFIGS.find((c) => c.id === "lease_expirations")!
 
   it("finds the lease expiration table", () => {
     const sections = parseSections(SAMPLE_FILING)
-    const chunk = selectChunk(sections, cfg.sectionKeys)
+    const chunk = selectChunk(sections, LEASE_KEYS)
     expect(chunk.toLowerCase()).toContain("lease expiration")
     expect(chunk.toLowerCase()).toContain("leases in place")
     expect(chunk).toContain("430")
@@ -240,7 +246,7 @@ describe("selectChunk — lease expirations", () => {
 
   it("includes the re-signed leases footnote", () => {
     const sections = parseSections(SAMPLE_FILING)
-    const chunk = selectChunk(sections, cfg.sectionKeys)
+    const chunk = selectChunk(sections, LEASE_KEYS)
     expect(chunk.toLowerCase()).toContain("28.4 million")
     expect(chunk.toLowerCase()).toContain("re-signed")
   })
@@ -280,9 +286,8 @@ describe("phrase scoring — discrimination tests (fail with word-freq, pass wit
       "Top 10 customers: 15.9% of consolidated NER\n" +
       "Top 25 customers: 23.0% of consolidated NER\n"
 
-    const tenantCfg = EXTRACTION_CONFIGS.find((c) => c.id === "tenant_concentration")!
     const sections = [{ name: "ITEM 1. BUSINESS", content: noise + targetTable }]
-    const chunk = selectChunk(sections, tenantCfg.sectionKeys)
+    const chunk = selectChunk(sections, TENANT_KEYS)
 
     expect(chunk.toLowerCase()).toContain("top 25 customers")
     expect(chunk).toContain("6.0%")
@@ -296,9 +301,8 @@ describe("phrase scoring — discrimination tests (fail with word-freq, pass wit
       "U.S.\t1208.7\t75,770\n" +
       "Southern California\t144.2\t18,323\n"
 
-    const geoCfg = EXTRACTION_CONFIGS.find((c) => c.id === "geographic_exposure")!
     const sections = [{ name: "ITEM 2. PROPERTIES", content: noise + targetTable }]
-    const chunk = selectChunk(sections, geoCfg.sectionKeys)
+    const chunk = selectChunk(sections, GEO_KEYS)
 
     expect(chunk.toLowerCase()).toContain("geographic distribution")
     expect(chunk).toContain("75,770")
@@ -313,9 +317,8 @@ describe("phrase scoring — discrimination tests (fail with word-freq, pass wit
       "2025\t521\t58\t8.0%\t430\t8.0%\n" +
       "2026\t723\t95\t13.3%\t715\t13.3%\n"
 
-    const leaseCfg = EXTRACTION_CONFIGS.find((c) => c.id === "lease_expirations")!
     const sections = [{ name: "ITEM 2. PROPERTIES", content: noise + targetTable }]
-    const chunk = selectChunk(sections, leaseCfg.sectionKeys)
+    const chunk = selectChunk(sections, LEASE_KEYS)
 
     expect(chunk.toLowerCase()).toContain("leases in place")
     expect(chunk).toContain("430")
